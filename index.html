@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partage de Progression</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom scrollbar for dark mode */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #171717; }
+        ::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #525252; }
+        
+        .pattern-inprogress {
+            background-image: repeating-linear-gradient(
+                -45deg,
+                rgba(255, 255, 255, 0.1),
+                rgba(255, 255, 255, 0.1) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+        }
+    </style>
+</head>
+<body class="bg-neutral-900 text-neutral-100 min-h-screen p-4 md:p-8 flex flex-col gap-6">
+
+    <!-- Header -->
+    <header class="w-full text-center pt-2 pb-4 flex flex-col items-center gap-2">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-white mb-2">Exasperation</h1>
+        <p id="victory-subtitle" class="hidden text-lg text-green-400 font-medium transition-all">Challenge terminé en 0 runs.</p>
+        <button id="btn-show-recap" class="hidden bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 font-semibold py-1.5 px-6 rounded-full transition-colors text-sm">
+            Voir le résumé des runs
+        </button>
+    </header>
+
+    <div class="flex flex-col md:flex-row gap-6 w-full max-w-7xl mx-auto">
+        <!-- Sidebar / Form -->
+        <div class="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-4 shrink-0">
+            <form id="claim-form" class="bg-neutral-800 p-6 rounded-2xl shadow-xl border border-neutral-700/50 flex flex-col gap-4">
+                <h2 id="form-title" class="text-xl font-bold text-white mb-2">Réclamer une section</h2>
+                <input type="hidden" id="edit-id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-neutral-400 mb-1">Nom</label>
+                    <input type="text" id="input-name" required placeholder="Ex: Alice" 
+                        class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition-colors">
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="w-1/2">
+                        <label class="block text-sm font-medium text-neutral-400 mb-1">Début (%)</label>
+                        <input type="number" id="input-start" required min="0" max="100" step="any" placeholder="0"
+                            class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition-colors">
+                    </div>
+                    <div class="w-1/2">
+                        <label class="block text-sm font-medium text-neutral-400 mb-1">Fin (%)</label>
+                        <input type="number" id="input-end" required min="0" max="100" step="any" placeholder="100"
+                            class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition-colors">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-neutral-400 mb-1">Statut</label>
+                    <select id="input-status" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition-colors appearance-none">
+                        <option value="in_progress">En cours</option>
+                        <option value="done">Fini</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-neutral-400 mb-1">Description (Optionnelle)</label>
+                    <textarea id="input-description" maxlength="512" rows="2" placeholder="Attempts, lien vidéo..."
+                        class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition-colors resize-none"></textarea>
+                </div>
+
+                <div id="form-error" class="text-red-400 text-sm hidden"></div>
+
+                <div class="flex gap-2 mt-2">
+                    <button type="submit" id="btn-submit" class="flex-1 bg-white text-black font-semibold py-2 px-4 rounded-lg hover:bg-neutral-200 transition-colors">
+                        Réclamer
+                    </button>
+                    <button type="button" id="btn-cancel" class="hidden bg-neutral-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-neutral-600 transition-colors">
+                        Annuler
+                    </button>
+                </div>
+            </form>
+
+            <!-- Gap Widget -->
+            <div class="bg-neutral-800 p-6 rounded-2xl shadow-xl border border-neutral-700/50">
+                <h2 class="text-xl font-bold mb-4 text-white">Trous restants</h2>
+                <div id="gaps-container" class="flex flex-wrap gap-2 text-sm">
+                    <!-- Gaps will be injected here -->
+                </div>
+            </div>
+        </div>
+
+    <!-- Main Content -->
+    <div class="w-full md:w-2/3 lg:w-3/4 flex flex-col gap-6">
+        
+        <!-- Visualizer -->
+        <div class="bg-neutral-800 p-6 md:p-8 rounded-2xl shadow-xl border border-neutral-700/50">
+            <h2 class="text-xl font-bold mb-8 text-white">Progression Globale</h2>
+            
+            <!-- Main Bar -->
+            <div class="relative w-full mb-12">
+                <!-- 0-100 scale markers -->
+                <div class="absolute -top-6 left-0 right-0 flex justify-between text-xs text-neutral-500 font-medium">
+                    <span>0%</span>
+                    <span>25%</span>
+                    <span>50%</span>
+                    <span>75%</span>
+                    <span>100%</span>
+                </div>
+                <!-- The white background bar -->
+                <div class="w-full h-6 bg-neutral-600 rounded-full overflow-hidden shadow-inner relative">
+                    <!-- This acts as the visual reference of 100% -->
+                    <div class="w-full h-full bg-white opacity-30"></div>
+                </div>
+                <!-- Grid lines -->
+                <div class="absolute top-0 left-0 right-0 h-6 flex justify-between px-[1px] pointer-events-none opacity-20">
+                    <div class="w-[1px] h-full bg-black"></div>
+                    <div class="w-[1px] h-full bg-black"></div>
+                    <div class="w-[1px] h-full bg-black"></div>
+                    <div class="w-[1px] h-full bg-black"></div>
+                    <div class="w-[1px] h-full bg-black"></div>
+                </div>
+            </div>
+
+            <!-- Claimed Bars Container -->
+            <div class="text-neutral-500 text-sm text-center py-4 italic" id="empty-state">
+                Aucune section n'a été réclamée pour le moment.
+            </div>
+            <div id="bars-container" class="flex flex-col gap-3">
+                <!-- Sub-bars will be injected here -->
+            </div>
+            
+            <!-- Legend -->
+            <div class="mt-8 flex gap-4 text-xs text-neutral-400 border-t border-neutral-700/50 pt-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-neutral-500 pattern-inprogress"></div>
+                    <span>En cours (Hachuré)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-neutral-500"></div>
+                    <span>Fini (Plein)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- List Management -->
+        <div class="bg-neutral-800 p-6 rounded-2xl shadow-xl border border-neutral-700/50 overflow-hidden flex-1">
+            <h2 class="text-xl font-bold mb-4 text-white">Gestion des sections</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-neutral-400 text-sm border-b border-neutral-700/50">
+                            <th class="pb-3 font-medium">Nom</th>
+                            <th class="pb-3 font-medium">Portion</th>
+                            <th class="pb-3 font-medium">Statut</th>
+                            <th class="pb-3 font-medium text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="list-container" class="text-sm">
+                        <!-- List items will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recap Widget (Hidden by default) -->
+        <div id="recap-widget" class="hidden bg-neutral-800 p-6 rounded-2xl shadow-xl border border-green-500/50 overflow-hidden flex-1">
+            <h2 class="text-xl font-bold mb-4 text-green-400">Sections ayant validé le challenge</h2>
+            <div id="recap-container" class="flex flex-col gap-4 max-h-[400px] overflow-y-auto pr-2">
+                <!-- Recap items will be injected here -->
+            </div>
+        </div>
+
+    </div>
+    </div> <!-- Fin du conteneur flex principal -->
+
+    <!-- Modal (Popup) pour la description -->
+    <div id="description-modal" class="fixed inset-0 z-50 hidden bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm" onclick="if(event.target === this) closeModal()">
+        <div class="bg-neutral-800 border border-neutral-700 p-6 rounded-2xl shadow-2xl max-w-md w-full relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-neutral-400 hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h3 id="modal-title" class="text-xl font-bold text-white mb-1">Nom</h3>
+            <p id="modal-range" class="text-sm text-green-400 font-medium mb-4">0% → 100%</p>
+            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-700/50">
+                <p id="modal-description" class="text-neutral-300 whitespace-pre-wrap"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuration sécurisée par GitHub Actions
+        const firebaseConfig = {
+            apiKey: "TON_API_KEY",
+            authDomain: "TON_PROJET.firebaseapp.com",
+            projectId: "TON_PROJET",
+            storageBucket: "TON_PROJET.appspot.com",
+            messagingSenderId: "TON_SENDER_ID",
+            appId: "TON_APP_ID"
+        };
+
+        // --- DOM Elements Declaration (Moved up to prevent ReferenceError) ---
+        const form = document.getElementById('claim-form');
+        const errorDiv = document.getElementById('form-error');
+        const cancelBtn = document.getElementById('btn-cancel');
+        const formTitle = document.getElementById('form-title');
+        const submitBtn = document.getElementById('btn-submit');
+
+        function showError(msg) {
+            if(errorDiv) {
+                errorDiv.textContent = msg;
+                errorDiv.classList.remove('hidden');
+                setTimeout(() => { errorDiv.classList.add('hidden'); }, 6000);
+            } else {
+                console.error("Erreur UI: ", msg);
+            }
+        }
+
+        let db, auth;
+        let segments = [];
+        let segmentsCollection;
+
+        // --- Initialize Firebase ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            
+            segmentsCollection = collection(db, 'segments');
+            initAuth();
+        } catch (error) {
+            console.error("Firebase init error:", error);
+            showError("Erreur d'initialisation Firebase. Si vous êtes en local, c'est normal car les clés ne sont pas encore remplacées.");
+        }
+
+        async function initAuth() {
+            try {
+                await signInAnonymously(auth);
+                listenToData();
+            } catch (error) {
+                console.error("Auth error:", error);
+                showError("Erreur d'authentification. Vérifie que l'auth anonyme est activée sur Firebase.");
+            }
+        }
+
+        function listenToData() {
+            if (!auth.currentUser) return;
+
+            onSnapshot(segmentsCollection, (snapshot) => {
+                segments = [];
+                snapshot.forEach((doc) => {
+                    segments.push({ id: doc.id, ...doc.data() });
+                });
+                segments.sort((a, b) => a.start - b.start);
+                renderUI();
+            }, (error) => {
+                console.error("Snapshot error:", error);
+                showError("Erreur de synchronisation des données.");
+            });
+        }
+
+        // --- UI Logic ---
+        function getColorFromName(name) {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash % 360);
+            return `hsl(${hue}, 75%, 60%)`;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!auth || !auth.currentUser) {
+                showError("Vous n'êtes pas connecté à la base de données.");
+                return;
+            }
+
+            const editId = document.getElementById('edit-id').value;
+            const name = document.getElementById('input-name').value.trim();
+            const start = parseFloat(document.getElementById('input-start').value);
+            const end = parseFloat(document.getElementById('input-end').value);
+            const status = document.getElementById('input-status').value;
+            const description = document.getElementById('input-description').value.trim();
+
+            if (start >= end) {
+                showError("Le début doit être inférieur à la fin.");
+                return;
+            }
+            if (start < 0 || end > 100) {
+                showError("Les valeurs doivent être entre 0 et 100.");
+                return;
+            }
+
+            const data = {
+                name,
+                start,
+                end,
+                status,
+                description,
+                timestamp: Date.now()
+            };
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                if (editId) {
+                    await updateDoc(doc(db, 'segments', editId), data);
+                } else {
+                    await addDoc(segmentsCollection, data);
+                }
+                
+                resetForm();
+            } catch (error) {
+                console.error("Save error:", error);
+                showError("Erreur lors de la sauvegarde. Vérifiez les permissions de la base de données.");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        cancelBtn.addEventListener('click', resetForm);
+
+        function resetForm() {
+            form.reset();
+            document.getElementById('edit-id').value = "";
+            document.getElementById('input-description').value = "";
+            formTitle.textContent = "Réclamer une section";
+            submitBtn.textContent = "Réclamer";
+            cancelBtn.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+        }
+
+        window.editSegment = (id) => {
+            const segment = segments.find(s => s.id === id);
+            if (!segment) return;
+            
+            document.getElementById('edit-id').value = segment.id;
+            document.getElementById('input-name').value = segment.name;
+            document.getElementById('input-start').value = segment.start;
+            document.getElementById('input-end').value = segment.end;
+            document.getElementById('input-status').value = segment.status;
+            document.getElementById('input-description').value = segment.description || "";
+            
+            formTitle.textContent = "Modifier la section";
+            submitBtn.textContent = "Mettre à jour";
+            cancelBtn.classList.remove('hidden');
+            
+            if(window.innerWidth < 768) {
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+        };
+
+        window.deleteSegment = async (id) => {
+            if (!auth || !auth.currentUser) return;
+            if(window.confirmDeleteId === id) {
+                try {
+                    await deleteDoc(doc(db, 'segments', id));
+                    window.confirmDeleteId = null;
+                } catch (error) {
+                    console.error("Delete error:", error);
+                    showError("Erreur lors de la suppression.");
+                }
+            } else {
+                window.confirmDeleteId = id;
+                renderUI(); 
+                setTimeout(() => {
+                    if(window.confirmDeleteId === id) {
+                        window.confirmDeleteId = null;
+                        renderUI();
+                    }
+                }, 3000);
+            }
+        };
+
+        function renderUI() {
+            renderBars();
+            renderList();
+            renderGaps();
+            checkVictory();
+        }
+
+        function formatNum(num) {
+            return Math.round(num * 1000) / 1000;
+        }
+
+        function getGaps(segs) {
+            let sorted = [...segs].sort((a, b) => a.start - b.start);
+            let gaps = [];
+            let currentEnd = 0;
+
+            for (let seg of sorted) {
+                if (seg.start > currentEnd) {
+                    gaps.push({ start: currentEnd, end: seg.start });
+                }
+                if (seg.end > currentEnd) {
+                    currentEnd = seg.end;
+                }
+            }
+            if (currentEnd < 100) {
+                gaps.push({ start: currentEnd, end: 100 });
+            }
+            return gaps;
+        }
+
+        function renderGaps() {
+            const container = document.getElementById('gaps-container');
+            const gaps = getGaps(segments);
+            
+            container.innerHTML = '';
+            
+            if (gaps.length === 0) {
+                const doneSegments = segments.filter(s => s.status === 'done');
+                const doneGaps = getGaps(doneSegments);
+                
+                let msgHtml = '<span class="text-green-400 font-medium w-full text-center py-2 block">Toute la barre est couverte !</span>';
+                
+                if (doneGaps.length > 0) {
+                    msgHtml += '<span class="text-neutral-400 text-xs w-full text-center block -mt-2 pb-2">en comptant les runs en cours</span>';
+                }
+                
+                container.innerHTML = msgHtml;
+                return;
+            }
+
+            gaps.forEach((gap) => {
+                const badge = document.createElement('span');
+                badge.className = 'bg-neutral-700/50 text-neutral-300 px-3 py-1.5 rounded-md border border-neutral-600/50 font-medium';
+                badge.textContent = `${formatNum(gap.start)} - ${formatNum(gap.end)}`;
+                container.appendChild(badge);
+            });
+        }
+
+        function getOptimalCoverage(segs) {
+            const doneSegs = segs.filter(s => s.status === 'done');
+            
+            doneSegs.sort((a, b) => {
+                if (a.start === b.start) return b.end - a.end;
+                return a.start - b.start;
+            });
+
+            let currentEnd = 0;
+            let chosen = [];
+            let i = 0;
+
+            while (currentEnd < 100) {
+                let maxEnd = currentEnd;
+                let bestSeg = null;
+
+                while (i < doneSegs.length && doneSegs[i].start <= currentEnd) {
+                    if (doneSegs[i].end > maxEnd) {
+                        maxEnd = doneSegs[i].end;
+                        bestSeg = doneSegs[i];
+                    }
+                    i++;
+                }
+
+                if (!bestSeg) {
+                    return null;
+                }
+
+                chosen.push(bestSeg);
+                currentEnd = maxEnd;
+            }
+            return chosen;
+        }
+
+        function checkVictory() {
+            const optimalCoverage = getOptimalCoverage(segments);
+            const subtitle = document.getElementById('victory-subtitle');
+            const recapBtn = document.getElementById('btn-show-recap');
+            
+            if (optimalCoverage) {
+                subtitle.textContent = `Challenge terminé en ${optimalCoverage.length} runs.`;
+                subtitle.classList.remove('hidden');
+                recapBtn.classList.remove('hidden');
+            } else {
+                subtitle.classList.add('hidden');
+                recapBtn.classList.add('hidden');
+                document.getElementById('recap-widget').classList.add('hidden');
+            }
+        }
+
+        window.showDescription = (name, start, end, encodedDesc) => {
+            const desc = decodeURIComponent(encodedDesc);
+            document.getElementById('modal-title').textContent = name;
+            document.getElementById('modal-range').textContent = `${formatNum(start)}% → ${formatNum(end)}%`;
+            
+            const modalDesc = document.getElementById('modal-description');
+            if (desc.trim()) {
+                modalDesc.textContent = desc;
+                modalDesc.className = 'text-neutral-300 whitespace-pre-wrap';
+            } else {
+                modalDesc.textContent = "Aucune description fournie pour cette section.";
+                modalDesc.className = 'text-neutral-500 italic whitespace-pre-wrap';
+            }
+            
+            document.getElementById('description-modal').classList.remove('hidden');
+        };
+
+        window.closeModal = () => {
+            document.getElementById('description-modal').classList.add('hidden');
+        };
+
+        document.getElementById('btn-show-recap').addEventListener('click', () => {
+            const recapWidget = document.getElementById('recap-widget');
+            const recapContainer = document.getElementById('recap-container');
+            
+            recapWidget.classList.remove('hidden');
+            recapContainer.innerHTML = '';
+            
+            const optimalSegments = getOptimalCoverage(segments) || [];
+            
+            optimalSegments.forEach(seg => {
+                const color = getColorFromName(seg.name);
+                const encodedDesc = encodeURIComponent(seg.description || "");
+                const hasDesc = !!seg.description;
+                
+                recapContainer.innerHTML += `
+                    <div onclick="showDescription('${seg.name}', ${seg.start}, ${seg.end}, '${encodedDesc}')" 
+                         class="p-4 bg-neutral-900 rounded-lg border border-neutral-700/50 shrink-0 cursor-pointer hover:bg-neutral-800 hover:border-neutral-500 transition-colors group">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full" style="background-color: ${color}"></div>
+                                <span class="font-bold text-white">${seg.name}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                ${hasDesc ? `<span class="text-neutral-500 group-hover:text-white transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></span>` : ''}
+                                <span class="text-sm text-green-400 font-medium bg-green-500/10 px-2 py-0.5 rounded">${formatNum(seg.start)}% &rarr; ${formatNum(seg.end)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            recapWidget.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        function renderBars() {
+            const container = document.getElementById('bars-container');
+            const emptyState = document.getElementById('empty-state');
+            
+            if (segments.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = '';
+
+            const sortedSegments = [...segments].sort((a, b) => a.start - b.start);
+            const rows = [];
+
+            sortedSegments.forEach(segment => {
+                let placed = false;
+                for (let i = 0; i < rows.length; i++) {
+                    const lastSegmentInRow = rows[i][rows[i].length - 1];
+                    if (lastSegmentInRow.end <= segment.start) {
+                        rows[i].push(segment);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    rows.push([segment]);
+                }
+            });
+
+            rows.forEach(rowSegments => {
+                const track = document.createElement('div');
+                track.className = 'w-full h-8 bg-neutral-800 rounded-md relative flex items-center';
+                
+                rowSegments.forEach(segment => {
+                    const width = segment.end - segment.start;
+                    const color = getColorFromName(segment.name);
+                    
+                    const bar = document.createElement('div');
+                    bar.className = `absolute h-full rounded-md shadow-sm transition-all duration-500 ease-in-out flex items-center justify-center group
+                        ${segment.status === 'in_progress' ? 'pattern-inprogress' : ''}`;
+                    bar.style.left = `${segment.start}%`;
+                    bar.style.width = `${width}%`;
+                    bar.style.backgroundColor = color;
+                    bar.style.boxShadow = `inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.2)`;
+
+                    const labelContainer = document.createElement('div');
+                    labelContainer.className = 'w-full h-full flex items-center justify-center overflow-hidden rounded-md';
+
+                    const label = document.createElement('span');
+                    label.className = 'text-[10px] font-bold text-black bg-white/50 px-1.5 py-0.5 rounded backdrop-blur-sm truncate max-w-[90%]';
+                    label.textContent = width > 5 ? segment.name : '';
+                    
+                    labelContainer.appendChild(label);
+                    bar.appendChild(labelContainer);
+                    
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'absolute -top-8 bg-black text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none left-1/2 -translate-x-1/2 shadow-lg border border-neutral-700';
+                    tooltip.textContent = `${segment.name} (${formatNum(segment.start)}% - ${formatNum(segment.end)}%)`;
+                    
+                    bar.appendChild(tooltip);
+                    track.appendChild(bar);
+                });
+                
+                container.appendChild(track);
+            });
+        }
+
+        function renderList() {
+            const container = document.getElementById('list-container');
+            container.innerHTML = '';
+
+            if (segments.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="4" class="text-center py-6 text-neutral-500 italic">Aucune donnée</td>`;
+                container.appendChild(tr);
+                return;
+            }
+
+            segments.forEach(segment => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-neutral-700/30 hover:bg-neutral-700/20 transition-colors';
+                
+                const isConfirmingDelete = window.confirmDeleteId === segment.id;
+                
+                const color = getColorFromName(segment.name);
+                const statusBadge = segment.status === 'done' 
+                    ? `<span class="bg-green-500/20 text-green-400 px-2 py-1 rounded-md text-xs font-medium border border-green-500/20">Fini</span>`
+                    : `<span class="bg-amber-500/20 text-amber-400 px-2 py-1 rounded-md text-xs font-medium border border-amber-500/20">En cours</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full" style="background-color: ${color}"></div>
+                            <span class="font-medium text-white">${segment.name}</span>
+                        </div>
+                    </td>
+                    <td class="py-3 text-neutral-300">
+                        ${formatNum(segment.start)}% &rarr; ${formatNum(segment.end)}%
+                    </td>
+                    <td class="py-3">
+                        ${statusBadge}
+                    </td>
+                    <td class="py-3 text-right">
+                        <button onclick="editSegment('${segment.id}')" class="text-blue-400 hover:text-blue-300 mr-3 transition-colors">Modifier</button>
+                        <button onclick="deleteSegment('${segment.id}')" class="${isConfirmingDelete ? 'text-red-500 font-bold' : 'text-red-400 hover:text-red-300'} transition-colors">
+                            ${isConfirmingDelete ? 'Sûr ?' : 'Supprimer'}
+                        </button>
+                    </td>
+                `;
+                container.appendChild(tr);
+            });
+        }
+        
+    </script>
+</body>
+</html>
